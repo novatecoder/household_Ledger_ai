@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.pytest_cache/
+.coverage
+unsloth_compiled_cache/
+wandb/
+.vscode/
+
+# Data & Models
+# 프로젝트 최상위의 data 폴더만 무시 (앞에 /를 붙이면 루트 기준이 됩니다)
+/data/
+/models/
+/outputs/
+
+# 모델 가중치 파일들 (위치 불문 제외)
+*.pt
+*.safetensors
+*.bin

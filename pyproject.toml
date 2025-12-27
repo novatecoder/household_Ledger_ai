@@ -1,0 +1,52 @@
+[tool.poetry]
+name = "household_ledger_ai"
+version = "0.1.0"
+description = "AI 기반 지능형 가계부 분석 및 소비 패턴 에이전트"
+authors = ["Kim Wonhyeok <nnovatecoder@gmail.com>"]
+packages = [{include = "household_ledger", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+# [Common & Config]
+pydantic = "2.12.5"
+pydantic-settings = "2.12.0"
+python-dotenv = "1.2.1"
+loguru = "0.7.3"
+pandas = "2.3.3"
+numpy = "2.3.5"
+
+# [Database]
+sqlalchemy = "2.0.45"
+psycopg2-binary = "2.9.11"
+redis = "7.1.0"
+neo4j = "6.0.3"
+
+# [AI & API]
+fastapi = "0.125.0"
+uvicorn = "0.38.0"
+langchain = "1.2.0"
+langgraph = "1.0.5"
+openai = "2.14.0"
+streamlit = "1.52.2"
+langchain-openai = "^1.1.6"
+
+# [Dev & Test]
+[tool.poetry.group.dev.dependencies]
+pytest = "9.0.2"
+pytest-asyncio = "1.3.0"
+pytest-mock = "3.15.1"
+pytest-cov = "7.0.0"
+httpx = "0.28.1"
+grandalf = "0.8"
+tqdm = "4.67.1"
+requests = "^2.32.3"
+
+[tool.poetry.scripts]
+# 스크립트 명칭을 가계부 도메인에 맞게 변경합니다.
+ledger-ingest = "household_ledger.infrastructure.ingestor:run_cli"
+ledger-drop = "household_ledger.infrastructure.ingestor:run_drop_cli"
+
+[build-system]
+requires = ["poetry-core", "setuptools>=70.0.0", "packaging>=24.2"]
+build-backend = "poetry.core.masonry.api"

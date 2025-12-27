@@ -1,0 +1,139 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL (가계부 정형 데이터 저장)
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ledger-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_NAME:-ledger_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-user} -d $${POSTGRES_DB:-ledger_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ledger-network
+
+  # 2. Redis (캐시 및 대화 히스토리 저장)
+  redis:
+    image: redis:alpine
+    container_name: ledger-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ledger-network
+
+  # 3. Neo4j (지식 그래프 - 관계 분석용)
+  neo4j:
+    image: neo4j:5.12.0
+    container_name: ledger-neo4j
+    ports:
+      - "7474:7474" 
+      - "7687:7687" 
+    environment:
+      - NEO4J_AUTH=neo4j/password
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p password 'RETURN 1' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ledger-network
+
+  # 4. vLLM (로컬 추론 서버)
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-server
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN}
+    ports:
+      - "8000:8000"
+    command: >
+      --model unsloth/Qwen2.5-Coder-7B-Instruct-bnb-4bit
+      --max-model-len 4096
+      --gpu-memory-utilization 0.8
+      --enforce-eager
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/v1/models || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 20
+      start_period: 600s
+    networks:
+      - ledger-network
+
+  # 5. Backend API (FastAPI - main.py)
+  app:
+    build: .
+    container_name: ledger-api
+    command: uvicorn src.household_ledger.main:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    env_file: .env
+    environment:
+      - DB_HOST=postgres
+      - REDIS_HOST=redis
+      - NEO4J_URI=bolt://neo4j:7687
+      - LLM_BASE_URL=http://vllm:8000/v1
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      neo4j: { condition: service_healthy }
+      vllm: { condition: service_healthy }
+    networks:
+      - ledger-network
+
+  # 6. Frontend Dashboard (Streamlit - demo_app.py)
+  dashboard:
+    build: .
+    container_name: ledger-dashboard
+    command: streamlit run src/household_ledger/demo_app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      - BACKEND_URL=http://app:8001  # 컨테이너 환경에서는 'app' 서비스 이름으로 접근
+    depends_on:
+      - app
+    networks:
+      - ledger-network
+# 7. Adminer (DB 관리 툴)
+  adminer:
+    image: adminer
+    container_name: ledger-adminer
+    ports:
+      - "8080:8080"
+    networks:
+      - ledger-network
+    depends_on:
+      - postgres
+
+networks:
+  ledger-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  neo4j_data:
